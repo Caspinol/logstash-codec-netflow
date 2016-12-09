@@ -1,7 +1,8 @@
-## 3.1.4
+## 3.2.0
 
   - Added support for MPLS labels
   - Added support for decoding forwarded status field (Netflow 9)
+  - Added support for Cisco ASR 9k Netflow fields
 
 ## 3.1.3
 

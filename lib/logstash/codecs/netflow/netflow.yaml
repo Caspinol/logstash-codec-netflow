@@ -234,6 +234,9 @@
 148:
 - :uint32
 - :conn_id
+152:
+- 8
+- :flow_start_msec
 176:
 - :uint8
 - :icmp_type
@@ -246,6 +249,18 @@
 179:
 - :uint8
 - :icmp_code_ipv6
+180:
+- :uint16
+- :udp_src_port
+181:
+- :uint16
+- :udp_dst_port
+182:
+- :uint16
+- :tcp_src_port
+183:
+- :uint16
+- :tcp_dst_port
 201:
 - mpls_label_stack_octets
 - mpls_label_stack_octets
@@ -261,30 +276,39 @@
 228:
 - :uint16
 - :xlate_dst_port
-233:
-- :uint8
-- :fw_event
-281:
-- :ip6_addr
-- :xlate_src_addr_ipv6
-282:
-- :ip6_addr
-- :xlate_dst_addr_ipv6
-33002:
-- :uint16
-- :fw_ext_event
-323:
-- 8
-- :event_time_msec
-152:
-- 8
-- :flow_start_msec
 231:
 - :uint32 
 - :fwd_flow_delta_bytes
 232:
 - :uint32
 - :rev_flow_delta_bytes
+233:
+- :uint8
+- :fw_event
+234:
+- :uint32
+- :ingressVRFID
+235:
+- :uint32
+- :egressVRFID
+281:
+- :ip6_addr
+- :xlate_src_addr_ipv6
+282:
+- :ip6_addr
+- :xlate_dst_addr_ipv6
+323:
+- 8
+- :event_time_msec
+361:
+- :uint16
+- :postNATPortBlockStart
+362:
+- :uint16
+- :postNATPortBlockEnd
+33002:
+- :uint16
+- :fw_ext_event
 33000:
 - :acl_id_asa
 - :ingress_acl_id
@@ -309,18 +333,3 @@
 40005:
 - :uint8
 - :fw_event
-95:
-- :uint32
-- :application_id
-180:
-- :uint16
-- :udp_src_port
-181:
-- :uint16
-- :udp_dst_port
-182:
-- :uint16
-- :tcp_src_port
-183:
-- :uint16
-- :tcp_dst_port
