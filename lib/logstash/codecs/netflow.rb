@@ -153,6 +153,7 @@ class LogStash::Codecs::Netflow < LogStash::Codecs::Base
         yield(decode_netflow5(flowset, record))
       end
     elsif header.version == 9
+#     BinData::trace_reading do
       flowset = Netflow9PDU.read(payload)
       flowset.records.each do |record|
         if metadata != nil
@@ -160,7 +161,8 @@ class LogStash::Codecs::Netflow < LogStash::Codecs::Base
         else
           decode_netflow9(flowset, record).each{|event| yield(event)}
         end
-      end
+#      end
+     end
     elsif header.version == 10
       flowset = IpfixPDU.read(payload)
       flowset.records.each do |record|
@@ -221,10 +223,12 @@ class LogStash::Codecs::Netflow < LogStash::Codecs::Base
       record.flowset_data.templates.each do |template|
         catch (:field) do
           fields = []
+          template_length = 0
           template.record_fields.each do |field|
-            entry = netflow_field_for(field.field_type, field.field_length)
+            entry = netflow_field_for(field.field_type, field.field_length, template.template_id)
             throw :field unless entry
             fields += entry
+            template_length += field.field_length
           end
           # We get this far, we have a list of fields
           #key = "#{flowset.source_id}|#{event["source"]}|#{template.template_id}"
@@ -234,6 +238,11 @@ class LogStash::Codecs::Netflow < LogStash::Codecs::Base
             key = "#{flowset.source_id}|#{template.template_id}"
           end
           @netflow_templates[key, @cache_ttl] = BinData::Struct.new(:endian => :big, :fields => fields)
+          @logger.debug("Received template #{template.template_id} with fields #{fields.inspect}")
+          @logger.debug("Received template #{template.template_id} of size #{template_length} bytes. Representing in #{@netflow_templates[key].num_bytes} BinData bytes")
+          if template_length != @netflow_templates[key].num_bytes
+            @logger.warn("Received template #{template.template_id} of size  (#{template_length} bytes) doesn't match BinData representation we built (#{@netflow_templates[key].num_bytes} bytes)")
+          end
           # Purge any expired templates
           @netflow_templates.cleanup!
         end
@@ -243,13 +252,17 @@ class LogStash::Codecs::Netflow < LogStash::Codecs::Base
       record.flowset_data.templates.each do |template|
         catch (:field) do
           fields = []
+          template_length = 0
           template.scope_fields.each do |field|
             fields << [uint_field(0, field.field_length), NETFLOW9_SCOPES[field.field_type]]
+            template_length += field.field_length
+            @logger.debug? and @logger.debug("Field definition complete for template #{template.template_id}", :field => field)
           end
           template.option_fields.each do |field|
-            entry = netflow_field_for(field.field_type, field.field_length)
+            entry = netflow_field_for(field.field_type, field.field_length, template.template_id)
             throw :field unless entry
             fields += entry
+            template_length += field.field_length
           end
           # We get this far, we have a list of fields
           #key = "#{flowset.source_id}|#{event["source"]}|#{template.template_id}"
@@ -259,6 +272,11 @@ class LogStash::Codecs::Netflow < LogStash::Codecs::Base
             key = "#{flowset.source_id}|#{template.template_id}"
           end
           @netflow_templates[key, @cache_ttl] = BinData::Struct.new(:endian => :big, :fields => fields)
+          @logger.debug("Received template #{template.template_id} with fields #{fields.inspect}")
+          @logger.debug("Received template #{template.template_id} of size #{template_length} bytes. Representing in #{@netflow_templates[key].num_bytes} BinData bytes")
+          if template_length != @netflow_templates[key].num_bytes
+            @logger.warn("Received template #{template.template_id} of size (#{template_length} bytes) doesn't match BinData representation we built (#{@netflow_templates[key].num_bytes} bytes)")
+          end
           # Purge any expired templates
           @netflow_templates.cleanup!
         end
@@ -483,23 +501,34 @@ class LogStash::Codecs::Netflow < LogStash::Codecs::Base
     ("uint" + (((length > 0) ? length : default) * 8).to_s).to_sym
   end # def uint_field
 
-  def netflow_field_for(type, length)
+  def netflow_field_for(type, length, template_id)
     if @netflow_fields.include?(type)
       field = @netflow_fields[type].clone
       if field.is_a?(Array)
 
         field[0] = uint_field(length, field[0]) if field[0].is_a?(Integer)
 
-        # Small bit of fixup for skip or string field types where the length
-        # is dynamic
-        case field[0]
+        # Small bit of fixup for 
+        # - skip or string field types where the length is dynamic
+	# - for uint(8|16|24|32} where we use the length as specified by the
+	#   template instead of the YAML (e.g. ipv6_flow_label is 3 bytes in
+	#   the YAML and Cisco doc, but Cisco ASR9k sends 4 bytes)
+	case field[0]
+        when :uint8
+          field[0] = uint_field(length, field[0])
+        when :uint16
+          field[0] = uint_field(length, field[0])
+        when :uint24
+          field[0] = uint_field(length, field[0])
+        when :uint32
+          field[0] = uint_field(length, field[0])
         when :skip
           field += [nil, {:length => length}]
         when :string
           field += [{:length => length, :trim_padding => true}]
         end
 
-        @logger.debug? and @logger.debug("Definition complete", :field => field)
+        @logger.debug? and @logger.debug("Field definition complete for template #{template_id}", :field => field)
 
         [field]
       else
@@ -507,7 +536,7 @@ class LogStash::Codecs::Netflow < LogStash::Codecs::Base
         nil
       end
     else
-      @logger.warn("Unsupported field", :type => type, :length => length)
+      @logger.warn("Unsupported field in template #{template_id}", :type => type, :length => length)
       nil
     end
   end # def netflow_field_for
